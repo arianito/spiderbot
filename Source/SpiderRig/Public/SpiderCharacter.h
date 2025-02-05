@@ -8,6 +8,8 @@ UCLASS()
 class SPIDERRIG_API ASpiderCharacter: public ACharacter
 {
 	GENERATED_BODY()
+private:
+	FRotator ActorMovementDirection{0};
 
 protected:
 	ASpiderCharacter();

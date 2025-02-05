@@ -20,7 +20,7 @@ private:
 	UFUNCTION()
 	void MoveInputAction(const FInputActionValue& Value) const;
 	UFUNCTION()
-	void LookInputAction(const FInputActionValue& Value) const;
+	void LookInputAction(const FInputActionValue& Value);
 	UFUNCTION()
 	void JumpInputAction(const FInputActionValue& Value) const;
 	
@@ -39,4 +39,7 @@ protected:
 public:
 	UPROPERTY(EditAnywhere, Category = "EnhancedInput")
 	TSoftObjectPtr<UInputMappingContext> InputMappingContext;
+
+	
+	FVector2D CameraMovement{0};
 };

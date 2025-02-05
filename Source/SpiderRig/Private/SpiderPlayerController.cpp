@@ -88,10 +88,11 @@ void ASpiderPlayerController::MoveInputAction(const FInputActionValue& Value) co
 	PossessedCharacter->ApplyCharacterMovement(Value.Get<FVector2D>());
 }
 
-void ASpiderPlayerController::LookInputAction(const FInputActionValue& Value) const
+void ASpiderPlayerController::LookInputAction(const FInputActionValue& Value)
 {
 	if (!PossessedCharacter) return;
-	PossessedCharacter->ApplyCameraMovement(Value.Get<FVector2D>());
+	CameraMovement = Value.Get<FVector2D>();
+	PossessedCharacter->ApplyCameraMovement(CameraMovement);
 }
 
 void ASpiderPlayerController::JumpInputAction(const FInputActionValue& Value) const

@@ -5,6 +5,7 @@
 
 #include "CameraConfigVolume.h"
 #include "SpiderCharacter.h"
+#include "SpiderPlayerController.h"
 #include "Components/BrushComponent.h"
 #include "Components/SplineComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -38,22 +39,58 @@ void ASpiderCamera::UpdateViewTargetInternal(FTViewTarget& OutVT, float DeltaTim
 	if (!OutVT.Target) return;
 	if (!OutVT.Target.IsA<ASpiderCharacter>()) return;
 
+
+	UWorld* World = GetWorld();
+	check(World);
+
 	const auto Character = Cast<ASpiderCharacter>(OutVT.Target.Get());
 	const FVector CameraTargetSocket = Character->GetActorLocation();
-	const auto PlayerController = GetOwningPlayerController();
+	const auto PlayerController = Cast<ASpiderPlayerController>(GetOwningPlayerController());
+	const auto CharacterMovement = Character->GetCharacterMovement();
 
 	FVector FinalLocation;
 	FRotator FinalRotation;
 
-	if (CurrentVolume)
+	const bool bIsGrounded = FMath::IsNearlyZero(CharacterMovement->Velocity.Z) && !CharacterMovement->IsFalling();
+
+	if (CurrentVolume != nullptr && bIsGrounded)
 	{
+		bAllowFollow = true;
+	}
+
+
+	if (bAllowFollow)
+	{
+		if (bIsGrounded)
+		{
+			if (FMath::Abs(PlayerController->CameraMovement.SquaredLength()) > 0.5f)
+			{
+				FreeLookRotation += FRotator(PlayerController->CameraMovement.Y, PlayerController->CameraMovement.X, 0);
+				FreeLookRotation.Pitch = FMath::ClampAngle(FreeLookRotation.Pitch, -5, 30);
+				FreeLookRotation.Yaw = FMath::ClampAngle(FreeLookRotation.Yaw, -30, 30);
+
+				constexpr double Delay = 3.0f;
+				LookAtTimestamp = World->GetTimeSeconds() + Delay;
+			}
+		}
+
+
+		constexpr double d = 0.5f;
+		const double t = ((LookAtTimestamp + d) - World->GetTimeSeconds()) / d;
+		const double f = FMath::Clamp(1.0f - t, 0.0f, 1.0f);
+
+		FreeLookRotation = UKismetMathLibrary::RLerp(FreeLookRotation, FRotator(), f, true);
+
+
 		const FVector CameraLock = CurrentVolume->CameraPath->FindLocationClosestToWorldLocation(
 			CameraTargetSocket, ESplineCoordinateSpace::World);
 		FinalLocation = CameraLock;
-		FinalRotation = FRotationMatrix::MakeFromX(Character->GetActorLocation() - FinalLocation).Rotator();
+		FinalRotation = FRotationMatrix::MakeFromX(CameraTargetSocket - FinalLocation).Rotator();
 	}
 	else
 	{
+		FreeLookRotation.Pitch = 0;
+		FreeLookRotation.Yaw = 0;
 		constexpr float CameraToTargetDistance = 100.0f;
 		const FVector ForwardVector = PlayerController->GetControlRotation().Vector();
 		FinalLocation = CameraTargetSocket - ForwardVector * CameraToTargetDistance;
@@ -61,25 +98,54 @@ void ASpiderCamera::UpdateViewTargetInternal(FTViewTarget& OutVT, float DeltaTim
 	}
 
 	double RotSpeed = 10.0f;
-	FVector LagSpeeds{10, 6, 0.2};
-	const auto CharacterMovement = Character->GetCharacterMovement();
-	LagSpeeds.Z = FMath::IsNearlyZero(CharacterMovement->Velocity.Z) ? 6.0f : 1.0f;
+	FVector LagSpeeds{10, 10, 0.2};
+	LagSpeeds.Z = bIsGrounded ? 10.0f : 2.5f;
 
-	if (CurrentVolume)
+	constexpr double d = 1.61f;
+	const double t = ((EnteredVolumeTimestamp + d) - World->GetTimeSeconds()) / d;
+	const double f = FMath::Clamp(1.0f - t, 0.1f, 1.0f);
+
+	LagSpeeds *= f;
+	RotSpeed *= f;
+
+	if (bAllowFollow)
 	{
-		LagSpeeds *= 0.75f;
+		LagSpeeds *= 0.5f;
 		RotSpeed *= 0.1f;
 	}
 
 	TargetRotator = FMath::RInterpTo(TargetRotator, FinalRotation, DeltaTime, RotSpeed);
 	TargetLocation = CalculateAxisIndependentLag(TargetLocation, FinalLocation, TargetRotator, LagSpeeds, DeltaTime);
+	TargetFreeLookRotation = FMath::RInterpTo(TargetFreeLookRotation, FreeLookRotation, DeltaTime, 5.0f);
 
-	if (CurrentVolume)
-		PlayerController->SetControlRotation(TargetRotator);
+	if (bAllowFollow)
+	{
+		PlayerController->SetControlRotation(TargetRotator + TargetFreeLookRotation);
+	}
+
+	FVector TraceOrigin = CameraTargetSocket;
+	float TraceRadius = 5.0f;
+	ECollisionChannel TraceChannel = ECC_Camera;
+
+
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+	Params.AddIgnoredActor(Character);
+
+	FHitResult HitResult;
+	const FCollisionShape SphereCollisionShape = FCollisionShape::MakeSphere(TraceRadius);
+	World->SweepSingleByChannel(HitResult, TraceOrigin, TargetLocation, FQuat::Identity,
+	                            TraceChannel, SphereCollisionShape, Params);
+
+
+	if (HitResult.IsValidBlockingHit())
+	{
+		TargetLocation += HitResult.Location - HitResult.TraceEnd;
+	}
 
 
 	OutVT.POV.Location = TargetLocation;
-	OutVT.POV.Rotation = TargetRotator;
+	OutVT.POV.Rotation = TargetRotator + TargetFreeLookRotation;
 }
 
 
@@ -108,34 +174,10 @@ void ASpiderCamera::OnBeginOverlap(AActor* OverlappedActor, AActor* OtherActor)
 	const auto CameraConfig = Cast<ACameraConfigVolume>(OtherActor);
 	if (!IsValid(CameraConfig)) return;
 	CurrentVolume = CameraConfig;
-	const auto Path = CurrentVolume->CameraPath;
-	const auto n = Path->GetNumberOfSplinePoints();
-	const FVector HeadAndTail[2] = {
-		Path->GetLocationAtSplinePoint(0, ESplineCoordinateSpace::World),
-		Path->GetLocationAtSplinePoint(n - 1, ESplineCoordinateSpace::World)
-	};
-	float Distance = MAX_FLT;
-	int32 Id = 0;
-	for (int32 i = 0; i < 2; i++)
-	{
-		if (const float Dist = FVector::Dist(TargetLocation, HeadAndTail[i]); Dist < Distance)
-		{
-			Id = i;
-			Distance = Dist;
-		}
-	}
-
-	if (Id == 0)
-	{
-		Path->SetLocationAtSplinePoint(0, TargetLocation, ESplineCoordinateSpace::World);
-	}
-	else
-	{
-		Path->SetLocationAtSplinePoint(n - 1, TargetLocation, ESplineCoordinateSpace::World);
-	}
-	OverlapMemory.Push(FCameraSplineMemory{Id, HeadAndTail[Id]});
+	EnteredVolumeTimestamp = GetWorld()->GetTimeSeconds();
 
 	OverlapLayers++;
+	UE_LOG(LogTemp, Display, TEXT("ASpiderCamera::OnBeginOverlap %d"), OverlapLayers);
 }
 
 void ASpiderCamera::OnEndOverlap(AActor* OverlappedActor, AActor* OtherActor)
@@ -144,19 +186,12 @@ void ASpiderCamera::OnEndOverlap(AActor* OverlappedActor, AActor* OtherActor)
 	const auto CameraConfig = Cast<ACameraConfigVolume>(OtherActor);
 	if (!IsValid(CameraConfig)) return;
 
-	if (!OverlapMemory.IsEmpty())
+	UE_LOG(LogTemp, Display, TEXT("ASpiderCamera::OnEndOverlap %d"), OverlapLayers);
+
+	if (CurrentVolume && !(--OverlapLayers))
 	{
-		const FCameraSplineMemory Value = OverlapMemory.Pop();
-		const auto Path = CameraConfig->CameraPath;
-
-		const auto n = Path->GetNumberOfSplinePoints();
-		if (Value.Id == 0)
-			Path->SetLocationAtSplinePoint(0, Value.PrevPosition, ESplineCoordinateSpace::World);
-		else
-			Path->SetLocationAtSplinePoint(n - 1, Value.PrevPosition, ESplineCoordinateSpace::World);
-	}
-
-
-	if (!(--OverlapLayers))
+		EnteredVolumeTimestamp = GetWorld()->GetTimeSeconds();
 		CurrentVolume = nullptr;
+		bAllowFollow = false;
+	}
 }
