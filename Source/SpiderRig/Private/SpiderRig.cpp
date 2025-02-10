@@ -5,183 +5,381 @@
 
 #include "Math/Transform.h"
 #include "Math/Vector.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
-
-void USpiderRig::Initialize(bool bRequestInit)
-{
-	UE_LOG(LogTemp, Display, TEXT("USpiderRig::InitializeBones -> Loading..."));
-
-	mSpineSpring.SetDefaultSpringConstants(0.9, 0.25);
-	if (!InitializeSpine()) return;
-	if (!InitializeBones()) return;
-	bIsReady = true;
-}
 
 bool USpiderRig::InitializeSpine()
 {
 	int32 BoneIndex;
-	const auto RigHierarchy = GetHierarchy();
 
-	if (!mSpine.IK.IsValid())
+	if (!Spine.IK.IsValid() || (BoneIndex = RigHierarchy->GetIndex(Spine.IK)) == INDEX_NONE)
 	{
-		UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeBones -> Invalid spine IK"));
-		return false;
-	}
-	if ((BoneIndex = RigHierarchy->GetIndex(mSpine.IK)) != INDEX_NONE)
-	{
-		mSpineIndices[0] = BoneIndex;
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeBones -> Invalid spine IK: %s"),
-		       *mSpine.IK.Name.ToString());
+		UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeSpine -> Invalid spine IK"));
 		return false;
 	}
 
+	// Storing the initial spine location
+	const auto& SpineIKIndex = BoneIndex;
+	const auto SpineGlobal = RigHierarchy->GetInitialGlobalTransform(SpineIKIndex);
+	InitialSpineLocationGlobal = SpineGlobal.GetLocation();
 
-	if (!mSpine.Bone.IsValid())
+
+	if (!Spine.Bone.IsValid() || (BoneIndex = RigHierarchy->GetIndex(Spine.Bone)) == INDEX_NONE)
 	{
-		UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeBones -> Invalid spine Bone"));
-		return false;
-	}
-	if ((BoneIndex = RigHierarchy->GetIndex(mSpine.Bone)) != INDEX_NONE)
-	{
-		mSpineIndices[1] = BoneIndex;
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeBones -> Invalid spine Bone: %s"),
-		       *mSpine.Bone.Name.ToString());
+		UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeSpine -> Invalid spine Bone"));
 		return false;
 	}
 
-	const auto IKOffset = RigHierarchy->GetGlobalControlOffsetTransformByIndex(mSpineIndices[0]);
-	const auto BoneOffset = RigHierarchy->GetGlobalControlOffsetTransformByIndex(mSpineIndices[1]);
-	mSpineIKOffset = BoneOffset.GetLocation() - IKOffset.GetLocation();
+	// Storing the bone index so we can speed up setting the transform
+	SpineIndex = BoneIndex;
+	// Configure spine spring interpolator
+	SpineSpringInterpolator.SetDefaultSpringConstants(SpineSpringStiffness, SpineSpringDampingRatio);
+
 	return true;
 }
 
-bool USpiderRig::InitializeBones()
+bool USpiderRig::InitializeLegs()
 {
 	int32 BoneIndex;
-	const auto RigHierarchy = GetHierarchy();
 
-	if (!mLegs.Num())
+	if (Legs.Num() < 2)
 	{
-		UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeBones -> No leg defined"));
+		UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeLegs -> at least two legs are required"));
 		return false;
 	}
-	mLegLength = mLegs.Num();
-	for (int32 i = 0; i < mLegs.Num(); i++)
+
+	// Initialize legs
+	LegLength = Legs.Num();
+
+	// Resize arrays so the can fit legs
+	if (LegLocationsWorld.Num() != LegLength)
+		LegLocationsWorld.SetNum(LegLength, EAllowShrinking::No);
+
+	if (FinalLegLocationsGlobal.Num() != LegLength)
+		FinalLegLocationsGlobal.SetNum(LegLength, EAllowShrinking::No);
+
+
+	for (int32 i = 0; i < LegLength; i++)
 	{
 		int j = 0;
-		const FSpiderLegDef& Leg = mLegs[i];
-		if (!Leg.IK.IsValid())
+		LegLocationsWorld[i] = FVector(0, 0, 0);
+		FinalLegLocationsGlobal[i] = FVector(0, 0, 0);
+		const FSpiderLegDef& Leg = Legs[i];
+
+		if (!Leg.IK.IsValid() || (BoneIndex = RigHierarchy->GetIndex(Leg.IK)) == INDEX_NONE)
 		{
-			UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeBones -> Invalid control IK at index: %d"), i);
+			UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeLegs -> Invalid IK for Leg[%d]"), i);
 			return false;
 		}
 
-		if ((BoneIndex = RigHierarchy->GetIndex(Leg.IK)) != INDEX_NONE)
-		{
-			mLegIndices[i][j++] = BoneIndex;
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeBones -> Invalid control IK: %s"),
-			       *Leg.IK.Name.ToString());
-			return false;
-		}
+		// First value of LegIndices is the IK index
+		LegIndices[i][j++] = BoneIndex;
 		if (!Leg.Bones.Num())
 		{
-			UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeBones -> Invalid bone length for: %s"),
-			       *Leg.IK.Name.ToString());
+			UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeLegs -> Invalid length for Leg[%d]"), i);
 			return false;
 		}
 
-		mLegIndices[i][j++] = Leg.Bones.Num();
-		for (int32 k = 0; k < Leg.Bones.Num(); k++)
+		// second value of LegIndices is the chain length
+		const int32 BonesLength = Leg.Bones.Num();
+		LegIndices[i][j++] = BonesLength;
+
+		for (int32 k = 0; k < BonesLength; k++)
 		{
 			const auto& BoneKey = Leg.Bones[k];
-			if (!BoneKey.IsValid())
+			if (!BoneKey.IsValid() || (BoneIndex = RigHierarchy->GetIndex(BoneKey)) == INDEX_NONE)
 			{
-				UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeBones -> Invalid bone IK at index: Legs[%d][%d]"), i,
-				       k);
+				UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeLegs -> Invalid bone at Leg[%d][%d]"), i, k);
 				return false;
 			}
-			if ((BoneIndex = RigHierarchy->GetIndex(BoneKey)) != INDEX_NONE)
-			{
-				mLegIndices[i][j++] = BoneIndex;
-			}
-			else
-			{
-				UE_LOG(LogTemp, Error, TEXT("USpiderRig::InitializeBones -> Invalid bone \"%s\" for IK %s"),
-				       *BoneKey.Name.ToString(), *Leg.IK.Name.ToString());
-				return false;
-			}
+			// the rest are bone indices for faster lookup
+			LegIndices[i][j++] = BoneIndex;
 		}
 	}
 	return true;
+}
+
+bool USpiderRig::InitializeVariables()
+{
+	ParentActor = GetHostingActor();
+	if (!ParentActor) return false;
+	if (!ParentActor->IsA<ACharacter>()) return false;
+	ParentCharacter = Cast<ACharacter>(ParentActor);
+
+	CharacterMovementComponent = ParentCharacter->GetCharacterMovement();
+	if (!CharacterMovementComponent) return false;
+
+	if (!ToeStickGroundTimeline) return false;
+	if (!ToeOffsetTimeline) return false;
+
+	RigHierarchy = GetHierarchy();
+	if (!RigHierarchy) return false;
+
+	return true;
+}
+
+void USpiderRig::Initialize(bool bRequestInit)
+{
+	if (!InitializeVariables()) return;
+	if (!InitializeSpine()) return;
+	if (!InitializeLegs()) return;
+	bIsReady = true;
 }
 
 
 bool USpiderRig::Execute(const FName& InEventName)
 {
+	Super::Execute(InEventName);
+	// If initialization failed, don't bother running the simulation!
 	if (!bIsReady) return false;
-	SolveSpineLocation(mSpineIndices[0], mSpineIndices[1]);
-	for (int i = 0; i < mLegLength; i++)
-		SolveCCDForLeg(mLegIndices[i][0], &mLegIndices[i][2], mLegIndices[i][1]);
+
+	// initialize runtime variables
+	if (!bIsInitialized)
+	{
+		if (!ParentSceneComponent)
+		{
+			ParentSceneComponent = GetOwningSceneComponent();
+			if (!ParentSceneComponent) return false;
+		}
+		if (!LivingWorld)
+		{
+			LivingWorld = GetWorld();
+			if (!LivingWorld) return false;
+		}
+		bIsInitialized = true;
+	}
+
+
+	// Calculate the delta time
+	const float ElapsedTime = LivingWorld->GetTimeSeconds();
+	const float RigDeltaTime = ElapsedTime - PrevFrame;
+	PrevFrame = ElapsedTime;
+
+
+	// Calculate local velocity
+	FVector LocalVelocity = RotateWorldToGlobal(CharacterMovementComponent->Velocity);
+	const float HorizontalSpeed = FMath::Clamp(LocalVelocity.Size2D() / CharacterMovementComponent->MaxWalkSpeed, 0, 1);
+	const float VerticalSpeed = LocalVelocity.Z;
+
+	// If moving, setup movement timestamp, to smoothly transition between different steps
+	if (HorizontalSpeed > 0.01)
+		LastMovementTimestamp = ElapsedTime;
+
+	// Calculate rotation based on jumping and falling velocity
+	LocalVelocity.Normalize();
+	LocalVelocity *= VerticalSpeed * FallingRotationZSpeedCoefficient * -1.0f;
+	LocalVelocity.Z = 0;
+	const float& Pitch = FMath::Clamp(LocalVelocity.X, -FallingRotationLimit, FallingRotationLimit);
+	const float& Roll = FMath::Clamp(LocalVelocity.Y, -FallingRotationLimit, FallingRotationLimit);
+	const FRotator Rotator = FRotator(Pitch, 0, Roll);
+	FinalSpineRotation = FMath::RInterpTo(FinalSpineRotation, Rotator, RigDeltaTime, SpineRotationLag);
+
+	// Calculate timeline for movement and stall state transition 
+	const float MovementTransitionTimeframe =
+		(LastMovementTimestamp + MovementTransitionDuration - ElapsedTime) / MovementTransitionDuration;
+	float OneOnMovement = FMath::Clamp(MovementTransitionTimeframe, 0.0f, 1.0f);
+	float OneOnStall = 1.0f - OneOnMovement;
+
+
+	// Calculate motor value to feed it into the curves
+	MotorValue += HorizontalSpeed * RigDeltaTime * ThrottleMultiplier;
+
+	// Calculate lagged horizontal speed
+	LaggedHorizontalSpeed = FMath::FInterpTo(
+		LaggedHorizontalSpeed,
+		HorizontalSpeed,
+		RigDeltaTime,
+		LazyLag + (OneOnStall * LazyStallLagMultiplier)
+	);
+
+
+	FVector SpineLocationGlobal = InitialSpineLocationGlobal;
+	if (CharacterMovementComponent->IsFalling())
+	{
+		bIsFalling = true;
+		SetSpineTransform(SpineLocationGlobal, FinalSpineRotation, RigDeltaTime * SpineSpringLag);
+		for (int i = 0; i < LegLength; i++)
+		{
+			const auto& LegIKIndex = LegIndices[i][0];
+			const auto LegGlobalTransform = RigHierarchy->GetInitialGlobalTransform(LegIKIndex);
+
+			// Offset the legs while falling to match the character speed 
+			const FVector LegVelocityOffset = LocalVelocity.GetClampedToSize(0.0f, FallingLegOffsetHorizontalLimit);
+
+			// spread the legs while falling to make it look like its jumping!
+			const float LegSpreadMultiplier = FMath::Clamp(
+				VerticalSpeed * FallingLegSpreadSpeedCoefficient * -1.0f,
+				FallingMinLegSpread,
+				FallingMaxLegSpread
+			);
+
+			FVector CurrentLegLocation = LegGlobalTransform.GetLocation() * LegSpreadMultiplier + LegVelocityOffset;
+
+			// Legs can also go up and down, for more realistic look and feel!
+			CurrentLegLocation.Z = FMath::Clamp(VerticalSpeed * FallingLegLocationCoefficient * -1.0f,
+			                                    FallingMinLegOffset, FallingMaxLegOffset);
+
+			SetLegLocation(i, CurrentLegLocation, RigDeltaTime * ToeFallingLag);
+		}
+	}
+	else
+	{
+		if (bIsFalling)
+		{
+			// Reset movement factors on fall
+			OneOnMovement = 0;
+			OneOnStall = 1;
+		}
+
+		const FVector UpVectorWorld = RotateGlobalToWorld(FVector::UpVector);
+		const auto SpineLocationWorld = TransformGlobalToWorld(SpineLocationGlobal);
+
+		for (int i = 0; i < LegLength; i++)
+		{
+			const auto& LegIKIndex = LegIndices[i][0];
+			const auto LegTransformGlobal = RigHierarchy->GetInitialGlobalTransform(LegIKIndex);
+			FVector LegLocationWorld = TransformGlobalToWorld(LegTransformGlobal.GetLocation());
+
+			// Find the leg location on the ground
+			TraceSingleLeg(LegLocationWorld, SpineLocationWorld, UpVectorWorld);
+
+			// Calculate the time value to evaluate curves
+			const float EvenlyDistributedCycle = i / static_cast<float>(LegLength);
+			const float OffCycleMultiplier = LaggedHorizontalSpeed * AnimationOffCycleCoefficient;
+			const double RepeatedTimeValue =
+				FMath::Frac(MotorValue + (1 - OffCycleMultiplier) * EvenlyDistributedCycle);
+
+
+			// Calculate leg offset
+			const float StickToGroundFactor = ToeStickGroundTimeline->GetFloatValue(RepeatedTimeValue);
+			const float AllowedToRaiseFactor = 1.0f - StickToGroundFactor;
+			const float LegOffsetFactor = ToeOffsetTimeline->GetFloatValue(RepeatedTimeValue);
+			const float LegOffsetCoefficient = FMath::Clamp(LegOffsetFactor * AllowedToRaiseFactor, -2.0f, 2.0f);
+			LegLocationWorld += UpVectorWorld * OneOnMovement * StepHeight * LegOffsetCoefficient;
+
+
+			// Lerp the leg position between its previously grounded location to its current ground location
+			LegLocationsWorld[i] = FMath::Lerp(
+				LegLocationsWorld[i],
+				LegLocationWorld,
+				FMath::Clamp(AllowedToRaiseFactor + OneOnStall, 0.0f, 1.0f)
+			);
+
+
+			// Convert calculated leg location to rig space
+			FVector NewLegLocationGlobal = TransformWorldToGlobal(LegLocationsWorld[i]);
+
+
+			// Calculate mean spine location based on spider legs
+			const float FinalSpineLocationZ = FMath::Max(SpineLocationGlobal.Z, NewLegLocationGlobal.Z);
+
+			// interpolate to its initial location on stall
+			SpineLocationGlobal.Z = FMath::Lerp(
+				InitialSpineLocationGlobal.Z,
+				FinalSpineLocationZ,
+				1.0f - LaggedHorizontalSpeed
+			);
+
+
+			// If spider has fallen on the ground, add an extra force, make it look natural
+			if (bIsFalling)
+				SpineLocationGlobal.Z -= FallingImpactOnSpine;
+
+			// Setup bone transforms
+			SetSpineTransform(SpineLocationGlobal, FinalSpineRotation, RigDeltaTime * SpineSpringLag);
+			SetLegLocation(i, NewLegLocationGlobal, RigDeltaTime * LegMovementLag);
+		}
+		bIsFalling = false;
+	}
 	return true;
 }
 
-void USpiderRig::SolveCCDForLeg(const int32& IKIndex, const int32* BoneIndices, const int32& Length)
+void USpiderRig::SetLegLocation(const int32& LegIndex, const FVector& NewLegLocationGlobal, const float& Dt)
 {
-	if (mChain.Num() != Length)
+	const int32& Length = LegIndices[LegIndex][1];
+	const int32* BoneIndices = &LegIndices[LegIndex][2];
+	FVector& LegLocationGlobal = FinalLegLocationsGlobal[LegIndex];
+
+	// Interpolate to final leg location
+	LegLocationGlobal = FMath::VInterpTo(LegLocationGlobal, NewLegLocationGlobal, Dt, ToePlacementLagSpeed);
+
+	// Initialize temporary arrays
+	if (TemporaryChain.Num() != Length)
 	{
-		mChain.SetNum(Length, EAllowShrinking::No);
-		mRotationLimitsPerItem.SetNum(Length, EAllowShrinking::No);
+		TemporaryChain.SetNum(Length, EAllowShrinking::No);
+		RotationLimitsPerItem.SetNum(Length, EAllowShrinking::No);
 	}
 
-	URigHierarchy* RigHierarchy = GetHierarchy();
+	// Initialize chain with bone transforms
 	for (int32 i = 0; i < Length; i++)
 	{
 		const int& BoneIndex = BoneIndices[i];
 		auto Transform = RigHierarchy->GetGlobalTransform(BoneIndex);
 		auto LocalTransform = RigHierarchy->GetLocalTransform(BoneIndex);
-		mChain[i] = FCCDIKChainLink(Transform, LocalTransform, i);
-		mRotationLimitsPerItem[i] = 30;
+		TemporaryChain[i] = FCCDIKChainLink(Transform, LocalTransform, i);
+		RotationLimitsPerItem[i] = 10;
 	}
-	const auto TargetTransform = RigHierarchy->GetGlobalTransform(IKIndex);
+
+	// Solve IK using CCD algorithm
 	const bool IsBoneLocationUpdated = AnimationCore::SolveCCDIK(
-		mChain,
-		TargetTransform.GetLocation(),
-		1.0f,
-		10.0f,
+		TemporaryChain,
+		LegLocationGlobal,
+		IKPrecision,
+		IKSolveIteration,
 		true,
 		false,
-		mRotationLimitsPerItem
+		RotationLimitsPerItem
 	);
 
-	if (IsBoneLocationUpdated)
+	if (!IsBoneLocationUpdated) return;
+
+	// Update bone transforms if they have to move
+	for (int i = 0; i < Length; i++)
 	{
-		for (int i = 0; i < Length; i++)
-		{
-			const int& BoneIndex = BoneIndices[i];
-			const FCCDIKChainLink& CurrentLink = mChain[i];
-			RigHierarchy->SetGlobalTransform(BoneIndex, CurrentLink.Transform, true);
-		}
+		const int& BoneIndex = BoneIndices[i];
+		const FCCDIKChainLink& CurrentLink = TemporaryChain[i];
+		RigHierarchy->SetGlobalTransform(BoneIndex, CurrentLink.Transform, true);
 	}
 }
 
-void USpiderRig::SolveSpineLocation(const int32& IKIndex, const int32& BoneIndex)
+void USpiderRig::SetSpineTransform(const FVector& SpineLocationGlobal, const FRotator& RotationGlobal, const float& Dt)
 {
-	URigHierarchy* RigHierarchy = GetHierarchy();
-	auto IKTransform = RigHierarchy->GetGlobalTransform(IKIndex);
-	const auto TargetLocation = IKTransform.GetLocation() + mSpineIKOffset;
-	const auto NewLocation = mSpineSpring.Update(TargetLocation, 0.1);
-	if (mSpineSpring.IsInMotion())
+	const auto NewLocation = SpineSpringInterpolator.Update(SpineLocationGlobal, Dt);
+	RigHierarchy->SetGlobalTransform(SpineIndex, FTransform(RotationGlobal.Quaternion(), NewLocation), true);
+}
+
+
+bool USpiderRig::TraceSingleLeg(FVector& LegLocationWorld, const FVector& RootLocationWorld,
+                                const FVector& UpVectorWorld) const
+{
+	FVector TraceDirection = (LegLocationWorld - (RootLocationWorld + UpVectorWorld * ToeTraceOriginUpward));
+	TraceDirection.Normalize();
+
+	// A ray-cast from Head to Toe
+	const FVector TraceOriginWorld = LegLocationWorld - TraceDirection * ToeTraceDepthInward;
+	const FVector TraceEndWorld = LegLocationWorld + TraceDirection * ToeTraceDepthOutward;
+
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(ParentActor);
+	const FCollisionShape SphereCollisionShape = FCollisionShape::MakeSphere(ToeTraceRadius);
+	FHitResult HitResult;
+	if (LivingWorld->SweepSingleByChannel(HitResult, TraceOriginWorld, TraceEndWorld, FQuat::Identity, ECC_Visibility,
+	                                      SphereCollisionShape, Params))
 	{
-		IKTransform.SetLocation(NewLocation);
-		RigHierarchy->SetGlobalTransform(BoneIndex, IKTransform, true);
+		LegLocationWorld = HitResult.ImpactPoint;
+		return true;
 	}
+
+	// If unsuccessful, try grabbing a ledge
+	// A ray-cast from Toe to Spine
+	if (LivingWorld->SweepSingleByChannel(
+		HitResult,
+		HitResult.TraceEnd, RootLocationWorld, FQuat::Identity, ECC_Visibility, SphereCollisionShape,
+		Params))
+	{
+		LegLocationWorld = HitResult.ImpactPoint;
+		return true;
+	}
+	return false;
 }

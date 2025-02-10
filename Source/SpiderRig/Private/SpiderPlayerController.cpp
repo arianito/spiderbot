@@ -9,14 +9,14 @@ void ASpiderPlayerController::OnPossess(APawn* NewPawn)
 {
 	Super::OnPossess(NewPawn);
 	PossessedCharacter = Cast<ASpiderCharacter>(NewPawn);
-	NotifyCameraCharacterPossession(NewPawn);
+	NotifyCameraAboutPossession(NewPawn);
 	SetupInputSystem();
 }
 
 void ASpiderPlayerController::OnUnPossess()
 {
 	Super::OnUnPossess();
-	NotifyCameraCharacterPossession(nullptr);
+	NotifyCameraAboutPossession(nullptr);
 	UnBindInputs();
 	PossessedCharacter = nullptr;
 }
@@ -28,7 +28,7 @@ void ASpiderPlayerController::SetupInputComponent()
 }
 
 
-void ASpiderPlayerController::NotifyCameraCharacterPossession(APawn* NewPawn) const
+void ASpiderPlayerController::NotifyCameraAboutPossession(APawn* NewPawn) const
 {
 	if (!PlayerCameraManager->IsA<ASpiderCamera>()) return;
 	const auto& CameraComponent = Cast<ASpiderCamera>(PlayerCameraManager);
@@ -82,17 +82,18 @@ void ASpiderPlayerController::SetupInputSystem() const
 	InputSystem->AddMappingContext(InputMappingContext.LoadSynchronous(), 0);
 }
 
-void ASpiderPlayerController::MoveInputAction(const FInputActionValue& Value) const
+void ASpiderPlayerController::MoveInputAction(const FInputActionValue& Value)
 {
 	if (!PossessedCharacter) return;
-	PossessedCharacter->ApplyCharacterMovement(Value.Get<FVector2D>());
+	MoveInputValue = Value.Get<FVector2D>();
+	PossessedCharacter->ApplyCharacterMovement(MoveInputValue);
 }
 
 void ASpiderPlayerController::LookInputAction(const FInputActionValue& Value)
 {
 	if (!PossessedCharacter) return;
-	CameraMovement = Value.Get<FVector2D>();
-	PossessedCharacter->ApplyCameraMovement(CameraMovement);
+	LookInputValue = Value.Get<FVector2D>();
+	PossessedCharacter->ApplyCameraMovement(LookInputValue);
 }
 
 void ASpiderPlayerController::JumpInputAction(const FInputActionValue& Value) const

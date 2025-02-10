@@ -13,17 +13,18 @@ class SPIDERRIG_API ASpiderPlayerController : public APlayerController
 	GENERATED_BODY()
 
 private:
-
 	TArray<uint32> BindingHandles;
 	TObjectPtr<ASpiderCharacter> PossessedCharacter = nullptr;
-	
+
 	UFUNCTION()
-	void MoveInputAction(const FInputActionValue& Value) const;
+	void MoveInputAction(const FInputActionValue& Value);
 	UFUNCTION()
 	void LookInputAction(const FInputActionValue& Value);
 	UFUNCTION()
 	void JumpInputAction(const FInputActionValue& Value) const;
-	
+
+	FVector2D MoveInputValue{0};
+	FVector2D LookInputValue{0};
 
 protected:
 	virtual void OnPossess(APawn* NewPawn) override;
@@ -34,12 +35,19 @@ protected:
 	void SetupInputSystem() const;
 	void BindInputs();
 	void UnBindInputs();
-	void NotifyCameraCharacterPossession(APawn* NewPawn) const;
+	void NotifyCameraAboutPossession(APawn* NewPawn) const;
 
 public:
 	UPROPERTY(EditAnywhere, Category = "EnhancedInput")
 	TSoftObjectPtr<UInputMappingContext> InputMappingContext;
 
-	
-	FVector2D CameraMovement{0};
+
+	FORCEINLINE const FVector2D& GetMoveInput() const
+	{
+		return MoveInputValue;
+	}
+	FORCEINLINE const FVector2D& GetLookInput() const
+	{
+		return LookInputValue;
+	}
 };

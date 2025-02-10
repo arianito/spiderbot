@@ -6,6 +6,7 @@
 #include "SpiderCamera.generated.h"
 
 class ACameraConfigVolume;
+class ASpiderCharacter;
 
 struct FCameraSplineMemory
 {
@@ -26,23 +27,40 @@ private:
 	UFUNCTION()
 	void OnEndOverlap(AActor* OverlappedActor, AActor* OtherActor);
 
-	bool bAllowFollow = false;
-	APawn* PrevPawn{nullptr};
-	ACameraConfigVolume* CurrentVolume{nullptr};
-	int32 OverlapLayers{0};
+	void CalculateLagSpeeds(FVector& LagSpeeds, float& RotSpeed) const;
+	void CalculateFreeLook(const bool& bIsGrounded);
+	void TraceCameraCollision(const ASpiderCharacter* Character, const FVector& TraceOrigin, FVector& Target, const float& TraceRadius = 5.0f) const;
+
+	bool bIsLocked = false;
+	
+	APawn* PreviouslyPossessedPawn{nullptr};
+	ACameraConfigVolume* CurrentLockedVolume{nullptr};
+	
+	int32 OverlapCounter{0};
+	
 	FRotator FreeLookRotation{0};
 	FRotator TargetFreeLookRotation{0};
-	double EnteredVolumeTimestamp = 0;
-	double LookAtTimestamp = 0;
+	
+	float ChangeStateTimestamp{0};
+	float InputChangedTimestamp{0};
 
-
-	FRotator PrevControlRotation{0};
+	FRotator PrevControlRotator{0};
 	FVector TargetLocation{0};
 	FRotator TargetRotator{0};
 
 protected:
 	virtual void UpdateViewTargetInternal(FTViewTarget& OutVT, float DeltaTime) override;
+	
 
 public:
 	void OnPossess(APawn* NewPawn);
+
+	UPROPERTY(EditAnywhere)
+	FVector GroundedLagSpeed{10, 10, 10};
+	
+	UPROPERTY(EditAnywhere)
+	FVector InAirLagSpeed{10, 10, 2.5f};
+	
+	UPROPERTY(EditAnywhere)
+	float LookLagSpeed{10.0f};
 };

@@ -8,7 +8,7 @@ USTRUCT(BlueprintType)
 struct SPIDERRIG_API FSpiderSpineDef
 {
 	GENERATED_BODY()
-public:
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(DisplayName = "Control IK"))
 	FRigElementKey IK;
 

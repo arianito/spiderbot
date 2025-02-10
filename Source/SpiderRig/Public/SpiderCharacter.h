@@ -3,12 +3,12 @@
 #include "GameFramework/Character.h"
 #include "SpiderCharacter.generated.h"
 
+class UControlRigComponent;
 
 UCLASS()
 class SPIDERRIG_API ASpiderCharacter: public ACharacter
 {
 	GENERATED_BODY()
-private:
 	FRotator ActorMovementDirection{0};
 
 protected:
@@ -21,5 +21,9 @@ public:
 	void ApplyCharacterMovement(const FVector2d& Movement);
 	void ApplyCameraMovement(const FVector2d& Movement);
 	void ApplyJump();
+
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TObjectPtr<UControlRigComponent> ControlRig;
 
 };
