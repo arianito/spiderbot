@@ -3,6 +3,7 @@
 
 #include "SpiderRig.h"
 
+#include "SpiderEffectsComponent.h"
 #include "Math/Transform.h"
 #include "Math/Vector.h"
 #include "GameFramework/Character.h"
@@ -58,6 +59,9 @@ bool USpiderRig::InitializeLegs()
 
 	if (FinalLegLocationsGlobal.Num() != LegLength)
 		FinalLegLocationsGlobal.SetNum(LegLength, EAllowShrinking::No);
+
+	if (LegState.Num() != LegLength)
+		LegState.SetNum(LegLength, EAllowShrinking::No);
 
 
 	for (int32 i = 0; i < LegLength; i++)
@@ -116,6 +120,9 @@ bool USpiderRig::InitializeVariables()
 	RigHierarchy = GetHierarchy();
 	if (!RigHierarchy) return false;
 
+	SpiderEffects = ParentActor->GetComponentByClass<USpiderEffectsComponent>();
+	if (!SpiderEffects) return false;
+
 	return true;
 }
 
@@ -171,7 +178,7 @@ bool USpiderRig::Execute(const FName& InEventName)
 	LocalVelocity *= VerticalSpeed * FallingRotationZSpeedCoefficient * -1.0f;
 	LocalVelocity.Z = 0;
 	const float& Pitch = FMath::Clamp(LocalVelocity.X, -FallingRotationLimit, FallingRotationLimit);
-	const float& Roll = FMath::Clamp(LocalVelocity.Y, -FallingRotationLimit, FallingRotationLimit);
+	const float& Roll = FMath::Clamp(-LocalVelocity.Y, -FallingRotationLimit, FallingRotationLimit);
 	const FRotator Rotator = FRotator(Pitch, 0, Roll);
 	FinalSpineRotation = FMath::RInterpTo(FinalSpineRotation, Rotator, RigDeltaTime, SpineRotationLag);
 
@@ -197,6 +204,15 @@ bool USpiderRig::Execute(const FName& InEventName)
 	FVector SpineLocationGlobal = InitialSpineLocationGlobal;
 	if (CharacterMovementComponent->IsFalling())
 	{
+		if (VerticalSpeed < 0.0f)
+		{
+			if (!bIsFallStarted)
+			{
+				JumpZStart = ParentCharacter->GetActorLocation().Z;
+				bIsFallStarted = true;
+			}
+			
+		}
 		bIsFalling = true;
 		SetSpineTransform(SpineLocationGlobal, FinalSpineRotation, RigDeltaTime * SpineSpringLag);
 		for (int i = 0; i < LegLength; i++)
@@ -225,15 +241,20 @@ bool USpiderRig::Execute(const FName& InEventName)
 	}
 	else
 	{
+		const FVector UpVectorWorld = RotateGlobalToWorld(FVector::UpVector);
+		const auto SpineLocationWorld = TransformGlobalToWorld(SpineLocationGlobal);
+
 		if (bIsFalling)
 		{
 			// Reset movement factors on fall
 			OneOnMovement = 0;
 			OneOnStall = 1;
+			
+			JumpImpact = FMath::Abs(JumpZStart - ParentCharacter->GetActorLocation().Z);
+			JumpZStart = 0;
+			bIsFallStarted = false;
+				SpiderEffects->NotifyFallenAfterJump(SpineLocationWorld, JumpImpact * 2.0f, false);
 		}
-
-		const FVector UpVectorWorld = RotateGlobalToWorld(FVector::UpVector);
-		const auto SpineLocationWorld = TransformGlobalToWorld(SpineLocationGlobal);
 
 		for (int i = 0; i < LegLength; i++)
 		{
@@ -281,10 +302,12 @@ bool USpiderRig::Execute(const FName& InEventName)
 				1.0f - LaggedHorizontalSpeed
 			);
 
-
 			// If spider has fallen on the ground, add an extra force, make it look natural
 			if (bIsFalling)
+			{
 				SpineLocationGlobal.Z -= FallingImpactOnSpine;
+				SpiderEffects->NotifyFallenAfterJump(LegLocationsWorld[i], JumpImpact, true);
+			}
 
 			// Setup bone transforms
 			SetSpineTransform(SpineLocationGlobal, FinalSpineRotation, RigDeltaTime * SpineSpringLag);

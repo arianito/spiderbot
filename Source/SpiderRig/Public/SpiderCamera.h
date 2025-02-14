@@ -48,6 +48,8 @@ private:
 	FVector TargetLocation{0};
 	FRotator TargetRotator{0};
 
+	FVector LazyDirection{0};
+
 protected:
 	virtual void UpdateViewTargetInternal(FTViewTarget& OutVT, float DeltaTime) override;
 	

@@ -59,8 +59,16 @@ void ASpiderCamera::UpdateViewTargetInternal(FTViewTarget& OutVT, float DeltaTim
 	{
 		CalculateFreeLook(bIsGrounded);
 
+		if (FVector Velocity = Character->GetVelocity(); Velocity.Size2D() > 1.0f)
+		{
+			Velocity.Z = 0;
+			Velocity.Normalize();
+			
+			LazyDirection = FMath::VInterpTo(LazyDirection, Velocity * 200.0f, DeltaTime, 1.0f);	
+		}
+		
 		const FVector CameraLock = CurrentLockedVolume->CameraPath->FindLocationClosestToWorldLocation(
-			CameraTargetSocket, ESplineCoordinateSpace::World);
+			CameraTargetSocket - LazyDirection, ESplineCoordinateSpace::World);
 
 		FinalLocation = CameraLock;
 		FinalRotation = FRotationMatrix::MakeFromX(CameraTargetSocket - FinalLocation).Rotator();
@@ -96,7 +104,7 @@ void ASpiderCamera::UpdateViewTargetInternal(FTViewTarget& OutVT, float DeltaTim
 
 void ASpiderCamera::CalculateFreeLook(const bool& bIsGrounded)
 {
-	constexpr double Duration = 0.5f;
+	constexpr double Duration = 1.5f;
 	const auto World = GetWorld();
 	const auto PlayerController = Cast<ASpiderPlayerController>(GetOwningPlayerController());
 	const auto LookInput = PlayerController->GetLookInput();
@@ -137,7 +145,7 @@ void ASpiderCamera::TraceCameraCollision(const ASpiderCharacter* Character, cons
 
 void ASpiderCamera::CalculateLagSpeeds(FVector& LagSpeeds, float& RotSpeed) const
 {
-	constexpr double Duration = 1.61f;
+	constexpr double Duration = 2.61f;
 	const double Timeframe = ((ChangeStateTimestamp + Duration) - GetWorld()->GetTimeSeconds()) / Duration;
 	const double Coefficient = FMath::Clamp(1.0f - Timeframe, 0.1f, 1.0f);
 
@@ -147,7 +155,7 @@ void ASpiderCamera::CalculateLagSpeeds(FVector& LagSpeeds, float& RotSpeed) cons
 	if (bIsLocked)
 	{
 		LagSpeeds *= 0.5f;
-		RotSpeed *= 0.1f;
+		RotSpeed *= 0.3f;
 	}
 }
 
@@ -189,8 +197,7 @@ void ASpiderCamera::OnBeginOverlap(AActor* OverlappedActor, AActor* OtherActor)
 void ASpiderCamera::OnEndOverlap(AActor* OverlappedActor, AActor* OtherActor)
 {
 	if (!OtherActor->IsA<ACameraConfigVolume>()) return;
-	const auto CameraConfig = Cast<ACameraConfigVolume>(OtherActor);
-	if (!IsValid(CameraConfig)) return;
+	if (const auto CameraConfig = Cast<ACameraConfigVolume>(OtherActor); !IsValid(CameraConfig)) return;
 
 	UE_LOG(LogTemp, Display, TEXT("ASpiderCamera::OnEndOverlap %d"), OverlapCounter);
 

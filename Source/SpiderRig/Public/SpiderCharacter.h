@@ -3,6 +3,7 @@
 #include "GameFramework/Character.h"
 #include "SpiderCharacter.generated.h"
 
+class USpiderEffectsComponent;
 class UControlRigComponent;
 
 UCLASS()
@@ -25,5 +26,8 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TObjectPtr<UControlRigComponent> ControlRig;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TObjectPtr<USpiderEffectsComponent> SpiderEffects;
 
 };

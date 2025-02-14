@@ -10,6 +10,7 @@
 #define MAX_SPIDER_LEG_LENGTH 8
 #define MAX_SPIDER_LEG_BONE_LENGTH 8
 
+class USpiderEffectsComponent;
 class ACharacter;
 class UCurveFloat;
 class UCharacterMovementComponent;
@@ -69,6 +70,9 @@ private:
 
 	// falling related properties
 	bool bIsFalling = false;
+	float JumpImpact = 0.0f;
+	float JumpZStart = 0.0f;
+	bool bIsFallStarted = false;
 
 
 	// time related properties
@@ -89,6 +93,7 @@ private:
 	TArray<float> RotationLimitsPerItem;
 	TArray<FCCDIKChainLink> TemporaryChain;
 	TArray<FVector> LegLocationsWorld;
+	TArray<bool> LegState;
 	TArray<FVector> FinalLegLocationsGlobal;
 
 
@@ -97,6 +102,7 @@ private:
 	ACharacter* ParentCharacter = nullptr;
 	UCharacterMovementComponent* CharacterMovementComponent = nullptr;
 	URigHierarchy* RigHierarchy = nullptr;
+	USpiderEffectsComponent* SpiderEffects;
 
 	// runtime initialized properties
 	bool bIsInitialized = false;

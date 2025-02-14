@@ -1,5 +1,6 @@
 ﻿#include "SpiderCharacter.h"
 
+#include "SpiderEffectsComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 
@@ -7,7 +8,7 @@ ASpiderCharacter::ASpiderCharacter()
 {
 	const auto Movement = GetCharacterMovement();
 	Movement->MaxWalkSpeed = 160;
-	Movement->FallingLateralFriction = 0.5f;
+	Movement->FallingLateralFriction = 1.0f;
 	Movement->JumpZVelocity = 320.0f;
 	Movement->MaxStepHeight = 10.0f;
 	Movement->PerchRadiusThreshold = 5.0f;
@@ -16,6 +17,8 @@ ASpiderCharacter::ASpiderCharacter()
 	bUseControllerRotationYaw = false;
 	JumpMaxCount = 2;
 	PrimaryActorTick.bCanEverTick = false;
+
+	SpiderEffects = CreateDefaultSubobject<USpiderEffectsComponent>(TEXT("SpiderEffectsComponent"));
 }
 
 void ASpiderCharacter::BeginPlay()

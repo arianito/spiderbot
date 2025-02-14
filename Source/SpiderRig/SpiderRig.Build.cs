@@ -9,7 +9,7 @@ public class SpiderRig : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
 		PrivateDependencyModuleNames.AddRange([
-			"Core", "CoreUObject", "Engine", "EnhancedInput", "ControlRig", "RigVM", "AnimationCore"
+			"Core", "CoreUObject", "Engine", "EnhancedInput", "ControlRig", "RigVM", "AnimationCore", "Niagara"
 		]);
 	}
 }
