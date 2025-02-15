@@ -164,10 +164,17 @@ bool USpiderRig::Execute(const FName& InEventName)
 	PrevFrame = ElapsedTime;
 
 
+	
 	// Calculate local velocity
 	FVector LocalVelocity = RotateWorldToGlobal(CharacterMovementComponent->Velocity);
-	const float HorizontalSpeed = FMath::Clamp(LocalVelocity.Size2D() / CharacterMovementComponent->MaxWalkSpeed, 0, 1);
-	const float VerticalSpeed = LocalVelocity.Z;
+	float HorizontalSpeed = FMath::Clamp(LocalVelocity.Size2D() / CharacterMovementComponent->MaxWalkSpeed, 0, 1);
+	float VerticalSpeed = LocalVelocity.Z;
+
+	
+	const bool bIsPawnControlled = ParentCharacter->IsPawnControlled();
+	if (bIsControlled && !bIsPawnControlled)
+		CharacterMovementComponent->Velocity = FVector(0, 0, 0);
+	bIsControlled = bIsPawnControlled;
 
 	// If moving, setup movement timestamp, to smoothly transition between different steps
 	if (HorizontalSpeed > 0.01)
@@ -211,7 +218,6 @@ bool USpiderRig::Execute(const FName& InEventName)
 				JumpZStart = ParentCharacter->GetActorLocation().Z;
 				bIsFallStarted = true;
 			}
-			
 		}
 		bIsFalling = true;
 		SetSpineTransform(SpineLocationGlobal, FinalSpineRotation, RigDeltaTime * SpineSpringLag);
@@ -249,11 +255,11 @@ bool USpiderRig::Execute(const FName& InEventName)
 			// Reset movement factors on fall
 			OneOnMovement = 0;
 			OneOnStall = 1;
-			
+
 			JumpImpact = FMath::Abs(JumpZStart - ParentCharacter->GetActorLocation().Z);
 			JumpZStart = 0;
 			bIsFallStarted = false;
-				SpiderEffects->NotifyFallenAfterJump(SpineLocationWorld, JumpImpact * 2.0f, false);
+			SpiderEffects->NotifyFallenAfterJump(SpineLocationWorld, JumpImpact * 2.0f, false);
 		}
 
 		for (int i = 0; i < LegLength; i++)

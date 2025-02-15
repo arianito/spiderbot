@@ -20,11 +20,9 @@ class SPIDERRIG_API USpiderRig : public UControlRig
 {
 	GENERATED_BODY()
 
-private:
 	bool InitializeLegs();
 	bool InitializeSpine();
 	bool InitializeVariables();
-	//
 	void SetLegLocation(const int32& LegIndex, const FVector& NewLegLocationGlobal, const float& Dt);
 	void SetSpineTransform(const FVector& SpineLocationGlobal, const FRotator& RotationGlobal, const float& Dt);
 
@@ -60,29 +58,30 @@ protected:
 
 private:
 	// whether the bones are correctly configured or not
-	bool bIsReady = false;
+	bool bIsReady{false};
+	bool bIsControlled{false};
 
 	// cache rig indices for faster lookup
-	int32 SpineIndex = -1;
+	int32 SpineIndex{-1};
 	int32 LegIndices[MAX_SPIDER_LEG_LENGTH][MAX_SPIDER_LEG_BONE_LENGTH + 1];
-	int32 LegLength = 0;
+	int32 LegLength{0};
 
 
 	// falling related properties
-	bool bIsFalling = false;
-	float JumpImpact = 0.0f;
-	float JumpZStart = 0.0f;
-	bool bIsFallStarted = false;
+	bool bIsFalling{false};
+	float JumpImpact{0};
+	float JumpZStart{0};
+	bool bIsFallStarted{false};
 
 
 	// time related properties
-	float PrevFrame = 0;
+	float PrevFrame{0};
 
 
 	// movement related properties
-	float LastMovementTimestamp = 0;
-	float LaggedHorizontalSpeed = 0;
-	float MotorValue = 0;
+	float LastMovementTimestamp{0};
+	float LaggedHorizontalSpeed{0};
+	float MotorValue{0};
 
 	// spine related properties
 	FVector InitialSpineLocationGlobal{0};
@@ -98,16 +97,16 @@ private:
 
 
 	// pre-initialized properties
-	AActor* ParentActor = nullptr;
-	ACharacter* ParentCharacter = nullptr;
-	UCharacterMovementComponent* CharacterMovementComponent = nullptr;
-	URigHierarchy* RigHierarchy = nullptr;
+	AActor* ParentActor{nullptr};
+	ACharacter* ParentCharacter{nullptr};
+	UCharacterMovementComponent* CharacterMovementComponent{nullptr};
+	URigHierarchy* RigHierarchy{nullptr};
 	USpiderEffectsComponent* SpiderEffects;
 
 	// runtime initialized properties
-	bool bIsInitialized = false;
-	USceneComponent* ParentSceneComponent = nullptr;
-	UWorld* LivingWorld = nullptr;
+	bool bIsInitialized{false};
+	USceneComponent* ParentSceneComponent{nullptr};
+	UWorld* LivingWorld{nullptr};
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(DisplayName = "Legs"), Category = "Rig Config")

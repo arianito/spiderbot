@@ -11,6 +11,9 @@ void ASpiderPlayerController::OnPossess(APawn* NewPawn)
 	PossessedCharacter = Cast<ASpiderCharacter>(NewPawn);
 	NotifyCameraAboutPossession(NewPawn);
 	SetupInputSystem();
+	UnBindInputs();
+	BindInputs();
+	UE_LOG(LogTemp, Error, TEXT("ASpiderPlayerController::OnPossess"));
 }
 
 void ASpiderPlayerController::OnUnPossess()
@@ -19,14 +22,8 @@ void ASpiderPlayerController::OnUnPossess()
 	NotifyCameraAboutPossession(nullptr);
 	UnBindInputs();
 	PossessedCharacter = nullptr;
+	UE_LOG(LogTemp, Error, TEXT("ASpiderPlayerController::OnUnPossess"));
 }
-
-void ASpiderPlayerController::SetupInputComponent()
-{
-	Super::SetupInputComponent();
-	BindInputs();
-}
-
 
 void ASpiderPlayerController::NotifyCameraAboutPossession(APawn* NewPawn) const
 {

@@ -19,11 +19,9 @@ class SPIDERRIG_API ASpiderCamera : public APlayerCameraManager
 {
 	GENERATED_BODY()
 
-private:
-	ASpiderCamera();
-
 	UFUNCTION()
 	void OnBeginOverlap(AActor* OverlappedActor, AActor* OtherActor);
+	
 	UFUNCTION()
 	void OnEndOverlap(AActor* OverlappedActor, AActor* OtherActor);
 

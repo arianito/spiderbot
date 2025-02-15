@@ -14,20 +14,16 @@ class SPIDERRIG_API ASpiderCharacter: public ACharacter
 
 protected:
 	ASpiderCharacter();
-	virtual void BeginPlay() override;
-	virtual void Tick(float DeltaSeconds) override;
-
+	
+	bool bOrientRotationToMovement = false;
+	friend class ASpiderCamera;
 
 public:
 	void ApplyCharacterMovement(const FVector2d& Movement);
 	void ApplyCameraMovement(const FVector2d& Movement);
 	void ApplyJump();
 
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TObjectPtr<UControlRigComponent> ControlRig;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TObjectPtr<USpiderEffectsComponent> SpiderEffects;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Effects)
+	TObjectPtr<USpiderEffectsComponent> SpiderEffectsComp;
 
 };

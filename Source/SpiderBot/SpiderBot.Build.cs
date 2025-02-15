@@ -7,15 +7,16 @@ public class SpiderBot : ModuleRules
 	public SpiderBot(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-	
-		PublicDependencyModuleNames.AddRange(["Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "SpiderRig"
+
+		PublicDependencyModuleNames.AddRange([
+			"Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "SpiderRig", "RigTutorial"
 		]);
 
 		PrivateDependencyModuleNames.AddRange([]);
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
-		
+
 		// Uncomment if you are using online features
 		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
 

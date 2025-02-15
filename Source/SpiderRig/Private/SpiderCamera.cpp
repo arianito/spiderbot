@@ -10,10 +10,6 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 
-ASpiderCamera::ASpiderCamera()
-{
-}
-
 FVector CalculateAxisIndependentLag(const FVector& CurrentLocation, const FVector& TargetLocation,
                                     FRotator CameraRotation, const FVector& LagSpeeds,
                                     const float& DeltaTime)
@@ -189,7 +185,7 @@ void ASpiderCamera::OnBeginOverlap(AActor* OverlappedActor, AActor* OtherActor)
 
 
 	const auto Character = Cast<ASpiderCharacter>(OverlappedActor);
-	Character->GetCharacterMovement()->bOrientRotationToMovement = true;
+	Character->bOrientRotationToMovement = true;
 	OverlapCounter++;
 	UE_LOG(LogTemp, Display, TEXT("ASpiderCamera::OnBeginOverlap %d"), OverlapCounter);
 }
@@ -206,7 +202,7 @@ void ASpiderCamera::OnEndOverlap(AActor* OverlappedActor, AActor* OtherActor)
 		ChangeStateTimestamp = GetWorld()->GetTimeSeconds();
 
 		const auto Character = Cast<ASpiderCharacter>(OverlappedActor);
-		Character->GetCharacterMovement()->bOrientRotationToMovement = false;
+		Character->bOrientRotationToMovement = false;
 		CurrentLockedVolume = nullptr;
 		bIsLocked = false;
 	}

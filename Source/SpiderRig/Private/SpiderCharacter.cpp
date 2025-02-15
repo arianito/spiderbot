@@ -18,17 +18,7 @@ ASpiderCharacter::ASpiderCharacter()
 	JumpMaxCount = 2;
 	PrimaryActorTick.bCanEverTick = false;
 
-	SpiderEffects = CreateDefaultSubobject<USpiderEffectsComponent>(TEXT("SpiderEffectsComponent"));
-}
-
-void ASpiderCharacter::BeginPlay()
-{
-	Super::BeginPlay();
-}
-
-void ASpiderCharacter::Tick(float DeltaSeconds)
-{
-	Super::Tick(DeltaSeconds);
+	SpiderEffectsComp = CreateDefaultSubobject<USpiderEffectsComponent>(TEXT("SpiderEffectsComponent"));
 }
 
 void ASpiderCharacter::ApplyCharacterMovement(const FVector2d& Movement)
@@ -40,7 +30,7 @@ void ASpiderCharacter::ApplyCharacterMovement(const FVector2d& Movement)
 	MoveDir = Rotator.RotateVector(MoveDir);
 	const auto DirectionVector = MoveDir;
 	AddMovementInput(DirectionVector);
-	const auto OrientRot = CharMovement->bOrientRotationToMovement
+	const auto OrientRot = bOrientRotationToMovement
 		                       ? FRotationMatrix::MakeFromX(DirectionVector).Rotator()
 		                       : FRotator(0, GetControlRotation().Yaw, 0);
 	ActorMovementDirection = UKismetMathLibrary::RLerp(ActorMovementDirection, OrientRot,
@@ -57,5 +47,4 @@ void ASpiderCharacter::ApplyCameraMovement(const FVector2d& Movement)
 void ASpiderCharacter::ApplyJump()
 {
 	Jump();
-	UE_LOG(LogTemp, Warning, TEXT("Jump"));
 }

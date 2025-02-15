@@ -11,13 +11,6 @@ USpiderEffectsComponent::USpiderEffectsComponent()
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
-
-void USpiderEffectsComponent::BeginPlay()
-{
-	Super::BeginPlay();
-}
-
-
 void USpiderEffectsComponent::NotifyFallenAfterJump(const FVector& WorldLocation, const float& JumpImpact,
                                                     const bool& bIsLeg)
 {

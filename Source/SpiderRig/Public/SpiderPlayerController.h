@@ -12,9 +12,8 @@ class SPIDERRIG_API ASpiderPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 
-private:
 	TArray<uint32> BindingHandles;
-	TObjectPtr<ASpiderCharacter> PossessedCharacter = nullptr;
+	TObjectPtr<ASpiderCharacter> PossessedCharacter{nullptr};
 
 	UFUNCTION()
 	void MoveInputAction(const FInputActionValue& Value);
@@ -29,8 +28,6 @@ private:
 protected:
 	virtual void OnPossess(APawn* NewPawn) override;
 	virtual void OnUnPossess() override;
-
-	virtual void SetupInputComponent() override;
 
 	void SetupInputSystem() const;
 	void BindInputs();
